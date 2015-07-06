@@ -1046,11 +1046,8 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
 					}else{
 	    				return new PluginResult(PluginResult.Status.ERROR, "Advertising is already running. You nedd to stop it first.");
 					}	
-				} catch (RemoteException e) {   
-		        	Log.e(TAG, "'startRangingBeaconsInRegion' service error: " + e.getCause());
-		        	return new PluginResult(PluginResult.Status.ERROR, e.getMessage());
 				} catch (Exception e) {
-					Log.e(TAG, "'startRangingBeaconsInRegion' exception "+e.getCause());
+					Log.e(TAG, "'startAdvertising' exception "+e.getCause());
 					return new PluginResult(PluginResult.Status.ERROR, e.getMessage());
 		        }
 			}
@@ -1063,12 +1060,17 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
 		_handleCallSafely(callbackContext, new ILocationManagerCommand() {
     		@Override
 			public PluginResult run() {
-    			
-    			//not supported on Android
-    			PluginResult result = new PluginResult(PluginResult.Status.ERROR, "iBeacon Advertising is not supported on Android");
-				result.setKeepCallback(true);
-				return result;
- 				
+				try {
+					if(!beaconTransmitter.isStarted()){
+						beaconTransmitter.stopAdvertising();
+						return new PluginResult(PluginResult.Status.OK);
+					}else{
+						return new PluginResult(PluginResult.Status.ERROR, "Advertising was not running.");
+					}
+				} catch (Exception e) {
+					Log.e(TAG, "'stopAdvertising' exception "+e.getCause());
+					return new PluginResult(PluginResult.Status.ERROR, e.getMessage());
+				}
 			}
     	});
 	}

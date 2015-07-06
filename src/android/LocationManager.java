@@ -23,10 +23,12 @@ import java.util.Collection;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import org.altbeacon.beacon.powersave.BackgroundPowerSaver;
 import org.altbeacon.beacon.Beacon;
 import org.altbeacon.beacon.BeaconConsumer;
 import org.altbeacon.beacon.BeaconManager;
 import org.altbeacon.beacon.BeaconParser;
+import org.altbeacon.beacon.BeaconTransmitter;
 import org.altbeacon.beacon.BleNotAvailableException;
 import org.altbeacon.beacon.Identifier;
 import org.altbeacon.beacon.MonitorNotifier;
@@ -74,6 +76,8 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
     //listener for changes in state for system Bluetooth service
 	private BroadcastReceiver broadcastReceiver; 
 	private BluetoothAdapter bluetoothAdapter;
+	private BeaconParser beaconParser;
+	private BeaconTransmitter beaconTransmitter;
 
 
     /**
@@ -107,6 +111,15 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
 
     }
     
+
+    @Override
+	public void onCreate() {
+        super.onCreate();
+        // Simply constructing this class and holding a reference to it in your custom Application class
+        // enables auto battery saving of about 60%
+        backgroundPowerSaver = new BackgroundPowerSaver(Context);
+    }
+
     /**
      * The final call you receive before your activity is destroyed.
      */ 
@@ -196,8 +209,10 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
     
     private void initLocationManager() {
         iBeaconManager = BeaconManager.getInstanceForApplication(cordova.getActivity());
-        iBeaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"));
+        beaconParser = new BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24");
+        iBeaconManager.getBeaconParsers().add(beaconParser);
         iBeaconManager.bind(this);
+		beaconTransmitter = new BeaconTransmitter(Context, beaconParser);
     }
     
     @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR2)
@@ -970,14 +985,27 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
 		_handleCallSafely(callbackContext, new ILocationManagerCommand() {
     		@Override
 			public PluginResult run() {
-    			
-    			//not supported at Android yet (see Android L)
-    			PluginResult result = new PluginResult(PluginResult.Status.OK, false);
-				result.setKeepCallback(true);
-				return result;
+
+    			int available = BeaconTransmitter.checkTransmissionSupported(Context);
+
+    			switch (result){
+    				case BeaconTransmitter.SUPPORTED:
+    					return new PluginResult(PluginResult.Status.OK, true);
+    				case BeaconTransmitter.NOT_SUPPORTED_MIN_SDK:
+    					return new PluginResult(PluginResult.Status.ERROR, "NOT_SUPPORTED_MIN_SDK");
+    				case BeaconTransmitter.NOT_SUPPORTED_BLE:
+    					return new PluginResult(PluginResult.Status.ERROR, "NOT_SUPPORTED_BLE");
+    				case BeaconTransmitter.NOT_SUPPORTED_CANNOT_GET_ADVERTISER_MULTIPLE_ADVERTISEMENTS:
+    					return new PluginResult(PluginResult.Status.ERROR, "NOT_SUPPORTED_CANNOT_GET_ADVERTISER_MULTIPLE_ADVERTISEMENTS");
+    				case BeaconTransmitter.NOT_SUPPORTED_CANNOT_GET_ADVERTISER:
+    					return new PluginResult(PluginResult.Status.ERROR, "NOT_SUPPORTED_CANNOT_GET_ADVERTISER");
+    				default: break;	
+    			}
+
+    			return new PluginResult(PluginResult.Status.ERROR, "Unknown error");
  				
 			}
-    	});
+    	});                                          
 		
 	}
     
@@ -986,9 +1014,10 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
 		_handleCallSafely(callbackContext, new ILocationManagerCommand() {
     		@Override
 			public PluginResult run() {
-    			
+    			boolean isStarted = beaconTransmitter.isStarted();
+
     			//not supported on Android
-    			PluginResult result = new PluginResult(PluginResult.Status.OK, false);
+    			PluginResult result = new PluginResult(PluginResult.Status.OK, isStarted);
 				result.setKeepCallback(true);
 				return result;
  				
@@ -1002,11 +1031,28 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
 		_handleCallSafely(callbackContext, new ILocationManagerCommand() {
     		@Override
 			public PluginResult run() {
-    			
-    			//not supported on Android
-    			PluginResult result = new PluginResult(PluginResult.Status.ERROR, "iBeacon Advertising is not supported on Android");
-				result.setKeepCallback(true);
-				return result;
+				try {
+					Region region = parseRegion(arguments);
+
+					Beacon beacon = new Beacon.Builder()
+						.setId1(region.getId1())
+						.setId2(region.getId2())
+						.setId3(region.getId3())
+						.build();
+
+					if(!beaconTransmitter.isStarted()){
+						beaconTransmitter.startAdvertising(beacon);	
+	    				return new PluginResult(PluginResult.Status.OK);
+					}else{
+	    				return new PluginResult(PluginResult.Status.ERROR, "Advertising is already running. You nedd to stop it first.");
+					}	
+				} catch (RemoteException e) {   
+		        	Log.e(TAG, "'startRangingBeaconsInRegion' service error: " + e.getCause());
+		        	return new PluginResult(PluginResult.Status.ERROR, e.getMessage());
+				} catch (Exception e) {
+					Log.e(TAG, "'startRangingBeaconsInRegion' exception "+e.getCause());
+					return new PluginResult(PluginResult.Status.ERROR, e.getMessage());
+		        }
 			}
     	});
 		

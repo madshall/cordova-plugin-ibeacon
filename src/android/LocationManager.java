@@ -20,6 +20,7 @@ package com.unarin.cordova.beacon;
 
 import java.security.InvalidKeyException;
 import java.util.Collection;
+import java.util.Arrays;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -205,7 +206,7 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
     
     private void initLocationManager() {
         iBeaconManager = BeaconManager.getInstanceForApplication(cordova.getActivity());
-        beaconParser = new BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24");
+        beaconParser = new BeaconParser().setBeaconLayout("m:2-3=beac,i:4-19,i:20-21,i:22-23,p:24-24,d:25-26");
         iBeaconManager.getBeaconParsers().add(beaconParser);
         iBeaconManager.bind(this);
 		beaconTransmitter = new BeaconTransmitter(thisContext, beaconParser);
@@ -401,22 +402,23 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
                     public void run() {
                     	
                     	try {
-                    		JSONObject data = new JSONObject();
-                    		JSONArray beaconData = new JSONArray();
-                    		for (Beacon beacon : iBeacons) {
-                    			beaconData.put(mapOfBeacon(beacon));
+                    		if(iBeacons.size() > 0){
+	                    		JSONObject data = new JSONObject();
+	                    		JSONArray beaconData = new JSONArray();
+	                    		for (Beacon beacon : iBeacons) {
+	                    			beaconData.put(mapOfBeacon(beacon));
+	                    		}
+	                    		data.put("eventType", "didRangeBeaconsInRegion");
+	                    		data.put("region", mapOfRegion(region));
+	        					data.put("beacons", beaconData);
+	        					
+	        					debugLog("didRangeBeacons: "+ data.toString());
+	        					
+	        					//send and keep reference to callback 
+	        					PluginResult result = new PluginResult(PluginResult.Status.OK,data);
+	        					result.setKeepCallback(true);
+	        					callbackContext.sendPluginResult(result);
                     		}
-                    		data.put("eventType", "didRangeBeaconsInRegion");
-                    		data.put("region", mapOfRegion(region));
-        					data.put("beacons", beaconData);
-        					
-        					debugLog("didRangeBeacons: "+ data.toString());
-        					
-        					//send and keep reference to callback 
-        					PluginResult result = new PluginResult(PluginResult.Status.OK,data);
-        					result.setKeepCallback(true);
-        					callbackContext.sendPluginResult(result);
-        					
            				} catch (Exception e) {
         					Log.e(TAG, "'rangingBeaconsDidFailForRegion' exception "+e.getCause());
         					beaconServiceNotifier.rangingBeaconsDidFailForRegion(region, e);
@@ -1029,18 +1031,24 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
 		
 	}
 
-	private void startAdvertising(final JSONObject arguments, CallbackContext callbackContext) {
+	private void startAdvertising(final JSONObject params, CallbackContext callbackContext) {
 		
 		_handleCallSafely(callbackContext, new ILocationManagerCommand() {
     		@Override
 			public PluginResult run() {
 				try {
-					Region region = parseRegion(arguments);
+					JSONArray primitive = params.getJSONArray("data");
+					Long[] wrappedData = new Long[primitive.length()];
+					for(int i = 0; i < primitive.length(); i++){
+						wrappedData[i] = primitive.getLong(i);
+					}
 
 					Beacon beacon = new Beacon.Builder()
-						.setId1(region.getId1().toString())
-						.setId2(region.getId2().toString())
-						.setId3(region.getId3().toString())
+						.setId1(params.getString("uuid"))
+						.setId2(params.getString("major"))
+						.setId3(params.getString("minor"))
+						.setTxPower(params.getInt("power"))
+						.setDataFields(Arrays.asList(wrappedData))
 						.build();
 
 					if(!beaconTransmitter.isStarted()){

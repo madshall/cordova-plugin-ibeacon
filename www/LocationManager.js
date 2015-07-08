@@ -448,12 +448,8 @@ LocationManager.prototype.isMonitoringAvailableForClass = function(region) {
  * @return {Q.Promise} Returns a promise which is resolved as soon as the
  * native layer acknowledged the dispatch of the advertising request.
  */
-LocationManager.prototype.startAdvertising = function(region, measuredPower) {
-	Regions.checkRegionType(region);
-	if (measuredPower)
-		return this._promisedExec('startAdvertising', [region, measuredPower], []);
-	else
-		return this._promisedExec('startAdvertising', [region], []);
+LocationManager.prototype.startAdvertising = function(beacon) {
+		return this._promisedExec('startAdvertising', [beacon], []);
 };
 
 /**

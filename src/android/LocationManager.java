@@ -98,12 +98,13 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
     public void initialize(CordovaInterface cordova, CordovaWebView webView) {
         super.initialize(cordova, webView);
         thisContext = cordova.getActivity().getApplicationContext();
+        iBeaconManager = BeaconManager.getInstanceForApplication(cordova.getActivity());
 
+        initLocationManager();
+        
         initBluetoothListener();
         initEventQueue();
         pauseEventPropagationToDom(); // Before the DOM is loaded we'll just keep collecting the events and fire them later.
-        
-        initLocationManager();
         
         debugEnabled = true;
 
@@ -205,11 +206,10 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
 	///////////////// SETUP AND VALIDATION /////////////////////////////////
     
     private void initLocationManager() {
-        iBeaconManager = BeaconManager.getInstanceForApplication(cordova.getActivity());
-        beaconParser = new BeaconParser().setBeaconLayout("m:2-3=beac,i:4-19,i:20-21,i:22-23,p:24-24,d:25-26");
-        iBeaconManager.getBeaconParsers().add(beaconParser);
+        iBeaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout("m:2-3=beac,i:4-19,i:20-21,i:22-23,p:24-24,d:25-26"));
         iBeaconManager.bind(this);
-		beaconTransmitter = new BeaconTransmitter(thisContext, beaconParser);
+
+		beaconTransmitter = new BeaconTransmitter(thisContext, new BeaconParser().setBeaconLayout("m:2-3=beac,i:4-19,i:20-21,i:22-23,p:24-24,d:25-26"));
     }
     
     @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR2)
@@ -1047,7 +1047,7 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
 						.setId1(params.getString("uuid"))
 						.setId2(params.getString("major"))
 						.setId3(params.getString("minor"))
-						.setTxPower(params.getInt("power"))
+						//.setTxPower(params.getInt("power"))
 						.setDataFields(Arrays.asList(wrappedData))
 						.build();
 

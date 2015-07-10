@@ -24,7 +24,6 @@ import java.util.Arrays;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import org.altbeacon.beacon.powersave.BackgroundPowerSaver;
 import org.altbeacon.beacon.Beacon;
 import org.altbeacon.beacon.BeaconConsumer;
 import org.altbeacon.beacon.BeaconManager;
@@ -77,7 +76,6 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
     //listener for changes in state for system Bluetooth service
 	private BroadcastReceiver broadcastReceiver; 
 	private BluetoothAdapter bluetoothAdapter;
-	private BeaconParser beaconParser;
 	private BeaconTransmitter beaconTransmitter;
 	private Context thisContext;
 
@@ -98,17 +96,18 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
     public void initialize(CordovaInterface cordova, CordovaWebView webView) {
         super.initialize(cordova, webView);
         thisContext = cordova.getActivity().getApplicationContext();
+
         iBeaconManager = BeaconManager.getInstanceForApplication(cordova.getActivity());
 
-        initLocationManager();
-        
+        iBeaconManager.setForegroundBetweenScanPeriod(5000);
+
         initBluetoothListener();
         initEventQueue();
         pauseEventPropagationToDom(); // Before the DOM is loaded we'll just keep collecting the events and fire them later.
         
+        initLocationManager();
+        
         debugEnabled = true;
-
-        BackgroundPowerSaver backgroundPowerSaver = new BackgroundPowerSaver(thisContext);
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
         	initBluetoothAdapter();
@@ -117,7 +116,6 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
 
     }
     
-
     /**
      * The final call you receive before your activity is destroyed.
      */ 
@@ -206,9 +204,8 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
 	///////////////// SETUP AND VALIDATION /////////////////////////////////
     
     private void initLocationManager() {
-        iBeaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout("m:2-3=beac,i:4-19,i:20-21,i:22-23,p:24-24,d:25-26"));
+        iBeaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24,d:25-26"));
         iBeaconManager.bind(this);
-
 		beaconTransmitter = new BeaconTransmitter(thisContext, new BeaconParser().setBeaconLayout("m:2-3=beac,i:4-19,i:20-21,i:22-23,p:24-24,d:25-26"));
     }
     
@@ -240,9 +237,12 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
 		//check device support
 		try {
 			iBeaconManager.checkAvailability();
-		} catch (Exception e) {
-			//if device does not support iBeacons an error is thrown
+		} catch (BleNotAvailableException e) {
+			//if device does not support iBeacons this error is thrown
 			debugWarn("Cannot listen to Bluetooth service: "+e.getMessage());
+			return;
+		} catch (Exception e) {
+			debugWarn("Unexpected exception checking for Bluetooth service: "+e.getMessage());
 			return;
 		}
 		
@@ -402,23 +402,22 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
                     public void run() {
                     	
                     	try {
-                    		if(iBeacons.size() > 0){
-	                    		JSONObject data = new JSONObject();
-	                    		JSONArray beaconData = new JSONArray();
-	                    		for (Beacon beacon : iBeacons) {
-	                    			beaconData.put(mapOfBeacon(beacon));
-	                    		}
-	                    		data.put("eventType", "didRangeBeaconsInRegion");
-	                    		data.put("region", mapOfRegion(region));
-	        					data.put("beacons", beaconData);
-	        					
-	        					debugLog("didRangeBeacons: "+ data.toString());
-	        					
-	        					//send and keep reference to callback 
-	        					PluginResult result = new PluginResult(PluginResult.Status.OK,data);
-	        					result.setKeepCallback(true);
-	        					callbackContext.sendPluginResult(result);
+                    		JSONObject data = new JSONObject();
+                    		JSONArray beaconData = new JSONArray();
+                    		for (Beacon beacon : iBeacons) {
+                    			beaconData.put(mapOfBeacon(beacon));
                     		}
+                    		data.put("eventType", "didRangeBeaconsInRegion");
+                    		data.put("region", mapOfRegion(region));
+        					data.put("beacons", beaconData);
+        					
+        					debugLog("didRangeBeacons: "+ data.toString());
+        					
+        					//send and keep reference to callback 
+        					PluginResult result = new PluginResult(PluginResult.Status.OK,data);
+        					result.setKeepCallback(true);
+        					callbackContext.sendPluginResult(result);
+        					
            				} catch (Exception e) {
         					Log.e(TAG, "'rangingBeaconsDidFailForRegion' exception "+e.getCause());
         					beaconServiceNotifier.rangingBeaconsDidFailForRegion(region, e);
@@ -987,26 +986,11 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
     			int available = beaconTransmitter.checkTransmissionSupported(thisContext);
     			PluginResult result;
 
-    			switch (available){
-    				case BeaconTransmitter.SUPPORTED:
-    					result = new PluginResult(PluginResult.Status.OK, true);
-    					break;
-    				case BeaconTransmitter.NOT_SUPPORTED_MIN_SDK:
-    					result = new PluginResult(PluginResult.Status.ERROR, "NOT_SUPPORTED_MIN_SDK");
-    					break;
-    				case BeaconTransmitter.NOT_SUPPORTED_BLE:
-    					result = new PluginResult(PluginResult.Status.ERROR, "NOT_SUPPORTED_BLE");
-    					break;
-    				case BeaconTransmitter.NOT_SUPPORTED_CANNOT_GET_ADVERTISER_MULTIPLE_ADVERTISEMENTS:
-    					result = new PluginResult(PluginResult.Status.ERROR, "NOT_SUPPORTED_CANNOT_GET_ADVERTISER_MULTIPLE_ADVERTISEMENTS");
-    					break;
-    				case BeaconTransmitter.NOT_SUPPORTED_CANNOT_GET_ADVERTISER:
-    					result = new PluginResult(PluginResult.Status.ERROR, "NOT_SUPPORTED_CANNOT_GET_ADVERTISER");
-    					break;
-    				default: 
-						result = new PluginResult(PluginResult.Status.ERROR, "Unknown error");
-    					break;
-    			}
+    			if(available == BeaconTransmitter.SUPPORTED)
+    				result = new PluginResult(PluginResult.Status.OK, true);
+    			else	
+    				result = new PluginResult(PluginResult.Status.OK, false);
+
 				result.setKeepCallback(true);
 				return result;
 			}
@@ -1084,6 +1068,7 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
 				}
 			}
     	});
+
 	}
 
 
@@ -1229,6 +1214,9 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
         // signal strength and transmission power
         dict.put("rssi", region.getRssi());
         dict.put("tx", region.getTxPower());
+    	if (region.getDataFields()!=null) {
+       		dict.put("data", region.getDataFields());
+    	}
 
         // accuracy = rough distance estimate limited to two decimal places (in metres)
         // NO NOT ASSUME THIS IS ACCURATE - it is effected by radio interference and obstacles

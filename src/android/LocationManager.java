@@ -1031,7 +1031,7 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
 						.setId1(params.getString("uuid"))
 						.setId2(params.getString("major"))
 						.setId3(params.getString("minor"))
-						//.setTxPower(params.getInt("power"))
+						.setTxPower(params.getInt("power"))
 						.setDataFields(Arrays.asList(wrappedData))
 						.build();
 

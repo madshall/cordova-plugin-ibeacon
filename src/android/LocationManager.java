@@ -204,9 +204,9 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
 	///////////////// SETUP AND VALIDATION /////////////////////////////////
     
     private void initLocationManager() {
-        iBeaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24,d:25-26"));
+        iBeaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24,d:25-25"));
         iBeaconManager.bind(this);
-		beaconTransmitter = new BeaconTransmitter(thisContext, new BeaconParser().setBeaconLayout("m:2-3=beac,i:4-19,i:20-21,i:22-23,p:24-24,d:25-26"));
+		beaconTransmitter = new BeaconTransmitter(thisContext, new BeaconParser().setBeaconLayout("m:2-3=beac,i:4-19,i:20-21,i:22-23,p:24-24,d:25-25"));
     }
     
     @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR2)
@@ -1214,13 +1214,11 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
         // signal strength and transmission power
         dict.put("rssi", region.getRssi());
         dict.put("tx", region.getTxPower());
-    	if (region.getDataFields()!=null) {
-       		dict.put("data", region.getDataFields());
-    	}
+		dict.put("data", new JSONArray(region.getDataFields()));
 
         // accuracy = rough distance estimate limited to two decimal places (in metres)
         // NO NOT ASSUME THIS IS ACCURATE - it is effected by radio interference and obstacles
-        dict.put("accuracy", Math.round(region.getDistance()*100.0)/100.0);
+        dict.put("accuracy", region.getDistance());
         
         return dict;
     }

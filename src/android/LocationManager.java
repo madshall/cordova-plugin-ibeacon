@@ -1032,6 +1032,7 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
 						.setId2(params.getString("major"))
 						.setId3(params.getString("minor"))
 						.setTxPower(params.getInt("power"))
+						.setBluetoothName(bluetoothAdapter.getName())
 						.setDataFields(Arrays.asList(wrappedData))
 						.build();
 
@@ -1207,6 +1208,7 @@ public class LocationManager extends CordovaPlugin implements BeaconConsumer {
         dict.put("major", region.getId2());
        	dict.put("minor", region.getId3());
        	dict.put("mac", region.getBluetoothAddress());
+       	dict.put("name", region.getBluetoothName());
 
         // proximity
         dict.put("proximity", nameOfProximity(region.getDistance()));
